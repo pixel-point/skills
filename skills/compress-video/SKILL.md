@@ -29,7 +29,15 @@ By default, create two compressed versions of the source video:
 - `video-vp9.webm`: VP9 video in a WebM container.
 - `video-h265.mp4`: H.265 video in an MP4 container.
 
-Honor explicitly requested codecs and CRF values.
+Use these CRF values by default for compression unless the user
+requests different values:
+
+- VP9: `42`.
+- H.265: `30`.
+- AV1: `42` (when AV1 is requested).
+
+Honor explicitly requested codecs and apply requested CRF overrides
+to the commands below.
 
 Use this command structure, replacing placeholders:
 
