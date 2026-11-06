@@ -28,15 +28,30 @@ npx skills add pixel-point/skills
 
 | Skill | What it does |
 | --- | --- |
-| [compress-video](skills/compress-video/SKILL.md) | Compresses videos locally with FFmpeg, produces VP9/WebM and H.265/MP4, and optionally compares codec/CRF settings or encodes AV1 and 10-bit video. |
+| [compress-video](skills/compress-video/SKILL.md) | Compresses videos locally with FFmpeg, compares codec/CRF settings, audits embedded videos, and scans and optimizes videos across a website project. |
 
 Example requests after installation:
 
 - "Compress `demo.mov` for my website."
 - "Compare VP9 at CRF 36, 42, and 48 with H.265 at CRF 24, 30, and 36."
 - "Compress `demo.mov` and also create an AV1 version."
+- "Audit the videos in `./website` used on `https://example.com/blog/post`."
+- "Scan and optimize all videos used by this project at `http://localhost:3000`."
 
 The video skill needs an agent that can run terminal commands. It checks for FFmpeg and FFprobe and installs missing dependencies.
+
+Website workflows require browser tools and access to the website's source code. Run them from its workspace or provide the project path. The agent inspects the source first, then uses a live or local URL to verify rendered video sizes and playback. If no URL is supplied, it can reuse or start the project's development server.
+
+Commands in Codex:
+
+```text
+$compress-video demo.mov
+$compress-video compare demo.mov
+$compress-video audit ./website https://example.com/blog/post
+$compress-video scan-and-optimize ./website http://localhost:3000
+```
+
+These are agent requests, not shell commands. Natural-language requests work too. `audit` reports on the specified page or scope. `scan-and-optimize` discovers videos across the whole project by default, checks their rendered sizes, compresses and downscales suitable videos, updates references, and verifies playback. Quality comparisons run only when requested. An explicit narrower scope limits the work.
 
 ## Repository structure
 
@@ -47,7 +62,12 @@ skills/
 └── skills/
     └── compress-video/
         ├── LICENSE
-        └── SKILL.md
+        ├── SKILL.md
+        └── references/
+            ├── compression.md
+            ├── comparison.md
+            ├── audit.md
+            └── scan-and-optimize.md
 ```
 
 Each skill lives in its own `skills/<skill-name>/` directory. The Skills CLI discovers this layout automatically. The repository root is the collection, so it does not contain a `SKILL.md`.

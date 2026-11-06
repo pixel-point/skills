@@ -1,224 +1,45 @@
 ---
 name: compress-video
-description: Compress local videos for the web or compare codec/CRF settings using FFmpeg and FFprobe, with WebM and MP4 outputs and optional AV1 or 10-bit encoding.
+description: Compress local videos with FFmpeg, compare codec/CRF quality, audit embedded videos on a website, or scan and optimize videos across a website's source project.
 ---
 
-Compress the requested video locally. Use FFmpeg and FFprobe.
-Install any missing dependencies.
+Compress videos locally using FFmpeg and FFprobe. Install missing dependencies
+needed for the requested workflow. Website workflows require source-code access
+and browser tools to verify the rendered site.
 
-For quality comparison requests, inspect the source, then follow
-the optional comparison path in section 7.
+## Commands
 
-1. **Inspect the source**
+| Request | Workflow |
+| --- | --- |
+| A video file, or `compress <file>` | Compress using [compression.md](references/compression.md). |
+| `compare <file>` | Compare quality and estimated sizes using [comparison.md](references/comparison.md). |
+| `audit [project] [URL or scope]` | Inspect embedded videos and report improvements using [audit.md](references/audit.md). |
+| `scan-and-optimize [project] [URL or scope]` | Discover, audit, optimize, and update videos across the project using [scan-and-optimize.md](references/scan-and-optimize.md). |
 
-Check that FFmpeg, FFprobe, and the required encoders are available.
+Infer the workflow from natural-language requests too. Read only the relevant
+references. A file without a command uses the compression workflow.
 
-Inspect duration, dimensions, rotation, pixel format, and audio streams:
+For both website workflows, use the current workspace or a supplied project
+path. If source code is unavailable, ask for repository access before starting.
+Begin with routes, components, styles, and asset references in the source code;
+use a live or local URL to verify rendered video sizes and playback. If no URL
+is supplied, reuse a development server or start the project locally.
 
-```sh
-ffprobe -v error -show_format -show_streams -of json INPUT
-```
+`audit` reviews the requested page and its source code, or the specified scope.
+`scan-and-optimize` covers the whole source project by default; a supplied URL
+is its browser starting point. Honor an explicitly narrower scope. Ask for a
+missing input only when it cannot be inferred.
 
-Read `avg_frame_rate`, falling back to `r_frame_rate` if invalid.
-Retain rational frame rates throughout calculations.
+Reuse source locations and preferences already provided. Compression defaults,
+including CRF values, are defined in [compression.md](references/compression.md).
 
-2. **Configure the outputs**
-
-By default, create two compressed versions of the source video:
-
-- `video-vp9.webm`: VP9 video in a WebM container.
-- `video-h265.mp4`: H.265 video in an MP4 container.
-
-Use these CRF values by default for compression unless the user
-requests different values:
-
-- VP9: `42`.
-- H.265: `30`.
-- AV1: `42` (when AV1 is requested).
-
-Honor explicitly requested codecs and apply requested CRF overrides
-to the commands below.
-
-Use this command structure, replacing placeholders:
-
-```sh
-ffmpeg -hide_banner -nostdin -n -i INPUT -map 0:v:0 \
-  VIDEO_FLAGS FILTER_FLAGS AUDIO_FLAGS OUTPUT
-```
-
-Choose fresh output paths if files already exist.
-
-**VP9/WebM — `video-vp9.webm`**
+## Examples
 
 ```text
--c:v libvpx-vp9 -b:v 0 -crf 42 -deadline best -pix_fmt yuv420p
+$compress-video demo.mov
+$compress-video compare demo.mov
+$compress-video audit ./website https://example.com/blog/post
+$compress-video scan-and-optimize ./website http://localhost:3000
 ```
 
-Audio removed:
-
-```text
--an
-```
-
-Audio kept:
-
-```text
--map 0:a:0 -c:a libopus
-```
-
-**H.265/MP4 — `video-h265.mp4`**
-
-```text
--c:v libx265 -crf 30 -preset veryslow -tag:v hvc1
--movflags faststart -pix_fmt yuv420p
-```
-
-Audio removed:
-
-```text
--an
-```
-
-Audio kept:
-
-```text
--map 0:a:0 -c:a aac
-```
-
-Apply exactly one audio branch per output. When keeping audio,
-use the encoder’s default audio bitrate.
-
-3. **Decide whether to keep audio**
-
-Honor explicit preferences:
-
-- Remove: use `-an`.
-- Keep: retain the first audio stream, including silence.
-  Report an error if no audio stream exists.
-
-Otherwise, analyze every audio stream over its full duration.
-Apply this filter separately to each stream:
-
-```text
-astats=metadata=1:reset=0,ametadata=mode=print:key=lavfi.astats.Overall.Peak_level:file=-:direct=1
-```
-
-Read the maximum reported peak across all streams:
-
-- No audio streams, or maximum peak <= -50 dBFS: use `-an`.
-- Any peak > -50 dBFS: keep the first audio stream.
-
-Treat `-inf` as silence. Failed or incomplete analysis is an error,
-not evidence of silence.
-
-4. **Handle dimensions**
-
-Preserve source resolution and display orientation by default.
-
-Normalize odd dimensions:
-
-- If width is odd, use `scale=WIDTH_MINUS_ONE:-2`.
-- Otherwise, if height is odd, use `scale=-2:HEIGHT_MINUS_ONE`.
-- If both dimensions are even, no normalization filter is needed.
-
-Apply requested cropping before resizing. Preserve aspect ratio
-when resizing and upscale only when explicitly requested.
-Combine video filters into one `-vf` chain.
-
-5. **Handle frame rate**
-
-Preserve frame rate at or below 30 fps.
-
-Above 30 fps, ask whether to preserve motion or cap the frame rate.
-Recommend capping for ordinary web playback. Reuse any preference
-already provided.
-
-For a requested cap, let `f` be the source frame rate:
-
-- If `30 < f < 50`, use `fps=30`.
-- If `f >= 50`, calculate `d=max(2,floor(f/30+0.5))`.
-  Use `fps=f/d` when that is <=30; otherwise use `fps=30`.
-
-Retain exact rational rates: `60000/1001` becomes `30000/1001`.
-Append the frame-rate filter after crop and scale filters.
-When preserving cadence, omit the frame-rate filter.
-
-6. **Handle optional AV1 and 10-bit output**
-
-Add AV1 only when explicitly requested.
-
-**AV1/WebM — `video-av1.webm`**
-
-```text
--c:v libsvtav1 -b:v 0 -crf 42 -preset 6 -pix_fmt yuv420p
-```
-
-Use `-an` when removing audio, or
-`-map 0:a:0 -c:a libopus` when keeping it.
-
-Default to 8-bit output, including for 10-bit sources.
-When explicitly asked for 10-bit, replace `yuv420p` with
-`yuv420p10le` for every output and verify the result with FFprobe.
-Never silently substitute 8-bit for a 10-bit request.
-
-7. **Optional: compare quality**
-
-Run only when the user requests a quality or size comparison.
-
-- Compare 2–8 codec/CRF pairs, for example VP9 at 36/42/48
-  and H.265 at 24/30/36. Honor requested candidates.
-  Include AV1 only when requested.
-- Default to three 1-second samples centered at 25%, 50%, and 75%
-  of the source duration, clamped to file bounds. Honor requested
-  sample positions and durations.
-- Create one shared video-only FFV1/MKV reference reel using
-  `trim`, `setpts`, and `concat`, with the requested crop, scale,
-  and bit depth. Encode every candidate from this reference using
-  the presets above and `-an`.
-- Measure SSIM against the reference with FFmpeg; add PSNR when
-  requested. Align timestamps and corresponding frames.
-  Save a preview video and matching still for each candidate.
-- Estimate full-video bytes as
-  `ceil(preview_bytes × source_duration / reference_duration)`.
-  Label this a video-only estimate.
-- Report a table of codec, CRF, SSIM, optional PSNR, and estimated
-  size. Highlight the Pareto frontier. On that frontier, normalize
-  SSIM and size to 0–1, favoring higher SSIM and smaller size,
-  then recommend the highest average score. Treat a zero range
-  as 1; break ties by smaller size, then higher SSIM.
-- Report sample positions and coverage. Single or clustered samples
-  provide weaker whole-video evidence.
-
-For comparison-only requests, finish with these results.
-
-8. **Verify and deliver**
-
-Wait for every encode to finish. Verify output codecs, dimensions,
-frame rate, pixel format, audio presence, and successful decoding.
-
-Report:
-
-- Output paths.
-- Original and output file sizes.
-- Percentage savings for each output.
-- The actual commands used.
-
-Create an HTML snippet using relative paths. Include an explicit
-`codecs` parameter only for AV1.
-
-Derive the AV1 codec string from the encoded file’s profile, level,
-tier, and bit depth. Append `,opus` only when audio is present.
-For example, `av01.0.05M.08,opus` applies only when those values
-match the encoded file.
-
-```html
-<video controls preload="metadata">
-  <source src="./video-av1.webm" type='video/webm; codecs="AV1_CODECS"'>
-  <source src="./video-vp9.webm" type="video/webm">
-  <source src="./video-h265.mp4" type="video/mp4">
-</video>
-```
-
-Include the AV1 source only when that output was created.
-Replace `AV1_CODECS` with the actual codec declaration and adapt
-filenames to the actual outputs.
+These are agent requests, not terminal commands.
