@@ -21,13 +21,39 @@ For standalone comparisons, inspect the source first.
 - Estimate full-video bytes as
   `ceil(preview_bytes × source_duration / reference_duration)`.
   Label this a video-only estimate.
-- Report a table of codec, CRF, SSIM, optional PSNR, and estimated
-  size. Highlight the Pareto frontier. On that frontier, normalize
+- Select a recommendation internally. On the Pareto frontier, normalize
   SSIM and size to 0–1, favoring higher SSIM and smaller size,
-  then recommend the highest average score. Treat a zero range
+  then select the highest average score. Treat a zero range
   as 1; break ties by smaller size, then higher SSIM.
-- Report sample positions and coverage. Single or clustered samples
-  provide weaker whole-video evidence.
+
+## Report
+
+Show a Markdown table with exactly these columns: **Format**, **CRF**,
+**Estimated size**, and **File**. Use one row per candidate, grouped by format
+and ordered by increasing CRF within each group. Separate the format and CRF;
+use readable sizes with consistent units.
+
+Use this structure, replacing the example rows with the actual results:
+
+```markdown
+| Format | CRF | Estimated size | File |
+| --- | ---: | ---: | --- |
+| VP9 / WebM | 42 | SIZE | [Preview](VP9_PREVIEW_PATH) |
+| H.265 / MP4 | 30 | SIZE | [Preview](H265_PREVIEW_PATH) |
+```
+
+Link each File cell directly to that candidate's generated preview video.
+Use an absolute local path, wrapping paths containing spaces in angle brackets.
+Verify the files exist before linking them. The table must include the file
+links even if a separate comparison viewer is also created.
+
+Keep SSIM, PSNR, and Pareto markers out of the default report. If the user
+explicitly requests metrics, show them separately from this table.
+
+After the table, recommend one format/CRF pair in plain language. Briefly report
+sample positions and coverage, and explain that sizes estimate the full video
+while the linked files are video-only sample previews. Single or clustered
+samples provide weaker whole-video evidence.
 
 For comparison-only requests, finish with these results.
 
